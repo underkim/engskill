@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Easy English Coach",
+  "description": "초보자가 웹에서 만나는 영어를 쉽게 이해하고 단어장으로 복습하는 크롬 확장프로그램입니다.",
+  "version": "1.0.0",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Easy English Coach"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
