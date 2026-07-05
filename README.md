@@ -6,9 +6,24 @@ Easy English Coach is a beginner-friendly Chrome extension for learning English 
 
 - Explain selected English text in simple Korean.
 - Save useful words and sentences to a personal wordbook.
-- Practice saved words with quick multiple-choice quizzes.
+- Practice with quick multiple-choice quizzes, even before saving words.
+- Track a daily 5-action goal and study streak.
+- Follow a simple 7-day beginner sprint plan.
+- Get a gentle daily reminder when you have not studied yet.
 - Use a right-click menu on any web page.
 - Works without a server or paid API.
+
+## Daily Routine
+
+Use the extension for 5 minutes a day:
+
+1. Select one English sentence on a web page.
+2. Click the refresh button or use the right-click menu.
+3. Read the simple meaning.
+4. Save one useful expression.
+5. Solve three quiz questions.
+
+The progress bar and streak counter are designed to make steady practice easy.
 
 ## How to Load in Chrome
 
@@ -32,3 +47,4 @@ Easy English Coach is a beginner-friendly Chrome extension for learning English 
 - `content.js`: Reads selected text from web pages.
 - `background.js`: Right-click menu and message handling.
 - `styles.css`: Popup styling.
+- `icon128.png`: Extension icon.

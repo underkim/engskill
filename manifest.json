@@ -4,6 +4,9 @@
   "description": "초보자가 웹에서 만나는 영어를 쉽게 이해하고 단어장으로 복습하는 크롬 확장프로그램입니다.",
   "version": "1.0.0",
   "action": {
+    "default_icon": {
+      "128": "icon128.png"
+    },
     "default_popup": "popup.html",
     "default_title": "Easy English Coach"
   },
@@ -12,7 +15,9 @@
   },
   "permissions": [
     "activeTab",
+    "alarms",
     "contextMenus",
+    "notifications",
     "storage",
     "scripting"
   ],
@@ -29,5 +34,8 @@
       ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "icons": {
+    "128": "icon128.png"
+  }
 }

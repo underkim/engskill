@@ -7,19 +7,27 @@ const wordList = document.querySelector("#wordList");
 const clearWords = document.querySelector("#clearWords");
 const quizBox = document.querySelector("#quizBox");
 const nextQuiz = document.querySelector("#nextQuiz");
+const dailyProgress = document.querySelector("#dailyProgress");
+const streakCount = document.querySelector("#streakCount");
+const progressBar = document.querySelector("#progressBar");
+const completeRoutine = document.querySelector("#completeRoutine");
+const planGrid = document.querySelector("#planGrid");
 const tabs = document.querySelectorAll(".tab");
 const panels = {
+  coach: document.querySelector("#coachPanel"),
   learn: document.querySelector("#learnPanel"),
   wordbook: document.querySelector("#wordbookPanel"),
   quiz: document.querySelector("#quizPanel")
 };
+
+const DAILY_GOAL = 5;
 
 const beginnerDictionary = {
   hello: "안녕하세요",
   thanks: "고마워요",
   thank: "감사하다",
   sorry: "미안한",
-  please: "제발, 부탁합니다",
+  please: "부탁합니다",
   good: "좋은",
   great: "훌륭한",
   bad: "나쁜",
@@ -50,12 +58,42 @@ const beginnerDictionary = {
   food: "음식",
   water: "물",
   time: "시간",
-  english: "영어"
+  english: "영어",
+  can: "할 수 있다",
+  will: "할 것이다",
+  have: "가지다",
+  go: "가다",
+  come: "오다",
+  see: "보다",
+  know: "알다",
+  think: "생각하다",
+  feel: "느끼다",
+  use: "사용하다"
 };
+
+const starterDeck = [
+  makeStarter("I want water.", "나는 물을 원해요.", "I want coffee."),
+  makeStarter("Can you help me?", "저를 도와줄 수 있나요?", "Can you call me?"),
+  makeStarter("I like this food.", "나는 이 음식을 좋아해요.", "I like this song."),
+  makeStarter("I need more time.", "나는 시간이 더 필요해요.", "I need your help."),
+  makeStarter("Let's start today.", "오늘 시작해 봅시다.", "Let's study today.")
+];
+
+const sprintPlan = [
+  "인사와 감사 표현",
+  "원하는 것 말하기",
+  "도움 요청하기",
+  "좋아하는 것 말하기",
+  "시간 표현 익히기",
+  "짧은 문장 따라 말하기",
+  "저장한 표현 복습하기"
+];
 
 document.addEventListener("DOMContentLoaded", async () => {
   await loadStoredSelection();
+  renderSprintPlan();
   await renderWordbook();
+  await renderProgress();
   renderQuiz();
 });
 
@@ -63,8 +101,9 @@ tabs.forEach((tab) => {
   tab.addEventListener("click", () => switchTab(tab.dataset.tab));
 });
 
-explainButton.addEventListener("click", () => {
+explainButton.addEventListener("click", async () => {
   renderExplanation(input.value);
+  await markStudy(1);
 });
 
 saveButton.addEventListener("click", async () => {
@@ -80,6 +119,7 @@ saveButton.addEventListener("click", async () => {
   const nextWords = exists ? words : [entry, ...words];
 
   await chrome.storage.local.set({ words: nextWords });
+  await markStudy(1);
   await renderWordbook();
   switchTab("wordbook");
 });
@@ -89,8 +129,11 @@ refreshSelection.addEventListener("click", async () => {
   if (text) {
     input.value = text;
     renderExplanation(text);
+    await markStudy(1);
+    switchTab("learn");
   } else {
     renderEmpty("현재 페이지에서 선택된 영어 문장을 찾지 못했습니다.");
+    switchTab("learn");
   }
 });
 
@@ -101,6 +144,11 @@ clearWords.addEventListener("click", async () => {
 });
 
 nextQuiz.addEventListener("click", renderQuiz);
+
+completeRoutine.addEventListener("click", async () => {
+  await markStudy(DAILY_GOAL);
+  await renderProgress();
+});
 
 function switchTab(tabName) {
   tabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === tabName));
@@ -138,7 +186,7 @@ async function getActiveTabSelection() {
 function renderExplanation(text) {
   const entry = buildEntry(text);
   if (!entry.text) {
-    renderEmpty("영어를 입력하면 초보자용 뜻, 핵심 단어, 예문을 보여드립니다.");
+    renderEmpty("영어를 입력하면 초보자용 뜻, 핵심 단어, 따라 말하기 문장을 보여드립니다.");
     return;
   }
 
@@ -152,8 +200,9 @@ function renderExplanation(text) {
     <p>${escapeHtml(entry.meaning)}</p>
     <h3>핵심 단어</h3>
     <ul>${keyWordItems}</ul>
-    <h3>연습 문장</h3>
-    <p>${escapeHtml(entry.example)}</p>
+    <h3>따라 말하기</h3>
+    <p class="speak-line">${escapeHtml(entry.example)}</p>
+    <p class="tip">소리 내어 3번 읽으면 오늘 목표가 더 빨리 쌓입니다.</p>
   `;
 }
 
@@ -167,10 +216,10 @@ function buildEntry(rawText) {
   const knownWords = extractKnownWords(text);
   const meaning = knownWords.length
     ? knownWords.map((word) => `${word} = ${beginnerDictionary[word]}`).join(", ")
-    : "이 표현은 아직 기본 사전에 없지만, 짧은 단어부터 표시하고 반복해서 익힐 수 있습니다.";
+    : "아직 기본 사전에 없는 표현입니다. 그대로 저장하고 퀴즈로 반복해 보세요.";
 
   const example = words.length > 1
-    ? `I can understand "${text}" step by step.`
+    ? `I can say: ${text}`
     : `I want to use "${text}" today.`;
 
   return {
@@ -178,6 +227,8 @@ function buildEntry(rawText) {
     text,
     meaning,
     example,
+    reviewCount: 0,
+    correctCount: 0,
     createdAt: Date.now()
   };
 }
@@ -200,7 +251,7 @@ async function renderWordbook() {
   const words = await getWords();
 
   if (!words.length) {
-    wordList.innerHTML = '<li class="empty">아직 저장된 표현이 없습니다.</li>';
+    wordList.innerHTML = '<li class="empty">아직 저장된 표현이 없습니다. 학습 탭에서 문장을 저장해 보세요.</li>';
     return;
   }
 
@@ -211,6 +262,7 @@ async function renderWordbook() {
         <button class="remove-word" type="button" data-id="${entry.id}">삭제</button>
       </div>
       <p class="word-meaning">${escapeHtml(entry.meaning)}</p>
+      <p class="review-meta">복습 ${entry.reviewCount || 0}회 · 정답 ${entry.correctCount || 0}회</p>
     </li>
   `).join("");
 
@@ -225,33 +277,124 @@ async function renderWordbook() {
 }
 
 async function renderQuiz() {
-  const words = await getWords();
-
-  if (words.length < 2) {
-    quizBox.innerHTML = '<p class="empty">단어장에 2개 이상 저장하면 퀴즈를 시작할 수 있습니다.</p>';
-    return;
-  }
-
-  const answer = sample(words);
-  const choices = shuffle([
-    answer.meaning,
-    ...shuffle(words.filter((word) => word.id !== answer.id)).slice(0, 2).map((word) => word.meaning)
-  ]);
+  const savedWords = await getWords();
+  const quizWords = savedWords.length >= 2 ? savedWords : starterDeck;
+  const answer = sample(quizWords);
+  const wrongChoices = shuffle(quizWords.filter((word) => word.id !== answer.id))
+    .slice(0, 2)
+    .map((word) => word.meaning);
+  const choices = shuffle([...new Set([answer.meaning, ...wrongChoices])]);
 
   quizBox.innerHTML = `
     <h3>${escapeHtml(answer.text)}</h3>
     <p>가장 알맞은 쉬운 뜻을 고르세요.</p>
-    ${choices.map((choice) => `<button class="choice" type="button" data-answer="${escapeHtml(answer.meaning)}">${escapeHtml(choice)}</button>`).join("")}
+    ${choices.map((choice) => `<button class="choice" type="button">${escapeHtml(choice)}</button>`).join("")}
     <p class="feedback" aria-live="polite"></p>
   `;
 
   quizBox.querySelectorAll(".choice").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const isCorrect = button.textContent === answer.meaning;
       button.classList.add(isCorrect ? "correct" : "wrong");
       quizBox.querySelector(".feedback").textContent = isCorrect ? "정답입니다!" : `정답은 "${answer.meaning}" 입니다.`;
+      await saveQuizResult(answer.id, isCorrect);
+      await markStudy(1);
     });
   });
+}
+
+async function saveQuizResult(answerId, isCorrect) {
+  const words = await getWords();
+  const nextWords = words.map((entry) => {
+    if (entry.id !== answerId) {
+      return entry;
+    }
+
+    return {
+      ...entry,
+      reviewCount: (entry.reviewCount || 0) + 1,
+      correctCount: (entry.correctCount || 0) + (isCorrect ? 1 : 0),
+      lastReviewedAt: Date.now()
+    };
+  });
+
+  await chrome.storage.local.set({ words: nextWords });
+  await renderWordbook();
+}
+
+async function markStudy(amount) {
+  const stats = await getStats();
+  const today = getDateKey();
+  const yesterday = getDateKey(-1);
+  const isNewDay = stats.lastStudyDate !== today;
+  const streak = isNewDay
+    ? (stats.lastStudyDate === yesterday ? (stats.streak || 0) + 1 : 1)
+    : stats.streak || 1;
+
+  const nextStats = {
+    ...stats,
+    streak,
+    lastStudyDate: today,
+    todayCount: Math.min(DAILY_GOAL, (isNewDay ? 0 : stats.todayCount || 0) + amount),
+    totalActions: (stats.totalActions || 0) + amount
+  };
+
+  await chrome.storage.local.set({ stats: nextStats });
+  await renderProgress();
+}
+
+async function getStats() {
+  const { stats = {} } = await chrome.storage.local.get(["stats"]);
+  const today = getDateKey();
+
+  if (stats.lastStudyDate && stats.lastStudyDate !== today) {
+    return { ...stats, todayCount: 0 };
+  }
+
+  return {
+    streak: 0,
+    todayCount: 0,
+    totalActions: 0,
+    ...stats
+  };
+}
+
+async function renderProgress() {
+  const stats = await getStats();
+  const count = Math.min(DAILY_GOAL, stats.todayCount || 0);
+  dailyProgress.textContent = `${count} / ${DAILY_GOAL}`;
+  streakCount.textContent = `${stats.streak || 0}일`;
+  progressBar.style.width = `${(count / DAILY_GOAL) * 100}%`;
+}
+
+function renderSprintPlan() {
+  planGrid.innerHTML = sprintPlan.map((title, index) => `
+    <article class="plan-item">
+      <strong>Day ${index + 1}</strong>
+      <span>${escapeHtml(title)}</span>
+    </article>
+  `).join("");
+}
+
+function makeStarter(text, meaning, example) {
+  return {
+    id: `starter-${text}`,
+    text,
+    meaning,
+    example,
+    reviewCount: 0,
+    correctCount: 0,
+    createdAt: 0
+  };
+}
+
+function getDateKey(offset = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function sample(items) {
