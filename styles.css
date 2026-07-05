@@ -237,6 +237,36 @@ button {
   padding: 14px;
 }
 
+.quiz-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 12px;
+}
+
+.quiz-toolbar strong {
+  font-size: 16px;
+}
+
+.online-badge {
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.online-badge.offline {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .explain-card h3,
 .quiz-box h3 {
   margin-bottom: 8px;
@@ -404,6 +434,18 @@ button {
   border-color: #ef4444;
   background: #fef2f2;
   color: #991b1b;
+}
+
+.quiz-meta {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.quiz-question {
+  margin-bottom: 10px;
+  line-height: 1.45;
 }
 
 .feedback {

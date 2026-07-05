@@ -80,10 +80,17 @@
       </section>
 
       <section class="panel" id="quizPanel">
-        <div class="quiz-box" id="quizBox">
-          <p class="empty">기본 표현으로 바로 퀴즈를 시작할 수 있습니다.</p>
+        <div class="quiz-toolbar">
+          <div>
+            <p class="daily-label">퀴즈 방식</p>
+            <strong id="quizModeLabel">온라인 랜덤</strong>
+          </div>
+          <span class="online-badge" id="onlineQuizStatus">ONLINE</span>
         </div>
-        <button class="primary full" id="nextQuiz" type="button">다음 문제</button>
+        <div class="quiz-box" id="quizBox">
+          <p class="empty">온라인에서 랜덤 단어를 가져와 퀴즈를 만듭니다.</p>
+        </div>
+        <button class="primary full" id="nextQuiz" type="button">온라인 랜덤 문제</button>
       </section>
     </main>
 

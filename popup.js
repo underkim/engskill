@@ -12,6 +12,8 @@ const streakCount = document.querySelector("#streakCount");
 const progressBar = document.querySelector("#progressBar");
 const completeRoutine = document.querySelector("#completeRoutine");
 const planGrid = document.querySelector("#planGrid");
+const quizModeLabel = document.querySelector("#quizModeLabel");
+const onlineQuizStatus = document.querySelector("#onlineQuizStatus");
 const tabs = document.querySelectorAll(".tab");
 const panels = {
   coach: document.querySelector("#coachPanel"),
@@ -21,6 +23,8 @@ const panels = {
 };
 
 const DAILY_GOAL = 5;
+const RANDOM_WORD_URL = "https://random-word-api.herokuapp.com/word?number=12";
+const DICTIONARY_URL = "https://api.dictionaryapi.dev/api/v2/entries/en/";
 
 const beginnerDictionary = {
   hello: "안녕하세요",
@@ -94,7 +98,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderSprintPlan();
   await renderWordbook();
   await renderProgress();
-  renderQuiz();
+  await renderQuiz();
 });
 
 tabs.forEach((tab) => {
@@ -140,7 +144,7 @@ refreshSelection.addEventListener("click", async () => {
 clearWords.addEventListener("click", async () => {
   await chrome.storage.local.set({ words: [] });
   await renderWordbook();
-  renderQuiz();
+  await renderQuiz();
 });
 
 nextQuiz.addEventListener("click", renderQuiz);
@@ -271,39 +275,198 @@ async function renderWordbook() {
       const nextWords = words.filter((entry) => entry.id !== button.dataset.id);
       await chrome.storage.local.set({ words: nextWords });
       await renderWordbook();
-      renderQuiz();
+      await renderQuiz();
     });
   });
 }
 
 async function renderQuiz() {
+  setQuizLoading();
+
+  try {
+    const quiz = await buildOnlineQuiz();
+    renderQuizQuestion(quiz, true);
+  } catch (_error) {
+    const fallbackQuiz = await buildOfflineQuiz();
+    renderQuizQuestion(fallbackQuiz, false);
+  }
+}
+
+function setQuizLoading() {
+  quizModeLabel.textContent = "온라인 랜덤";
+  onlineQuizStatus.textContent = "LOADING";
+  onlineQuizStatus.classList.remove("offline");
+  quizBox.innerHTML = '<p class="empty">온라인에서 랜덤 단어와 뜻을 가져오는 중입니다.</p>';
+  nextQuiz.disabled = true;
+}
+
+async function buildOnlineQuiz() {
+  const randomWords = await fetchJson(RANDOM_WORD_URL, 7000);
+  const cleanWords = [...new Set(randomWords)]
+    .map((word) => String(word).toLowerCase().trim())
+    .filter((word) => /^[a-z]{3,12}$/.test(word))
+    .slice(0, 8);
+
+  const dictionaryItems = await Promise.all(cleanWords.map(fetchDictionaryItem));
+  const items = dictionaryItems.filter(Boolean).slice(0, 4);
+
+  if (items.length < 4) {
+    throw new Error("Not enough online quiz items");
+  }
+
+  return makeRandomQuiz(items, "online");
+}
+
+async function fetchDictionaryItem(word) {
+  try {
+    const entries = await fetchJson(`${DICTIONARY_URL}${encodeURIComponent(word)}`, 7000);
+    const firstMeaning = entries?.[0]?.meanings?.find((meaning) => meaning.definitions?.[0]?.definition);
+    const definition = firstMeaning?.definitions?.[0]?.definition;
+    const example = firstMeaning?.definitions?.find((item) => item.example)?.example || `I learned the word "${word}" today.`;
+
+    if (!definition || definition.length > 140) {
+      return null;
+    }
+
+    return {
+      id: `online-${word}-${Date.now()}`,
+      text: word,
+      meaning: definition,
+      example,
+      partOfSpeech: firstMeaning.partOfSpeech || "word"
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function fetchJson(url, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`Request failed: ${response.status}`);
+    }
+
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function buildOfflineQuiz() {
   const savedWords = await getWords();
-  const quizWords = savedWords.length >= 2 ? savedWords : starterDeck;
-  const answer = sample(quizWords);
-  const wrongChoices = shuffle(quizWords.filter((word) => word.id !== answer.id))
-    .slice(0, 2)
-    .map((word) => word.meaning);
-  const choices = shuffle([...new Set([answer.meaning, ...wrongChoices])]);
+  const quizWords = savedWords.length >= 4 ? savedWords : starterDeck;
+  return makeRandomQuiz(shuffle(quizWords).slice(0, 4), "offline");
+}
+
+function makeRandomQuiz(items, source) {
+  const answer = sample(items);
+  const mode = sample(["meaning", "reverse", "spelling"]);
+
+  if (mode === "reverse") {
+    return {
+      source,
+      mode,
+      answer,
+      title: "뜻을 보고 단어 고르기",
+      question: answer.meaning,
+      choices: shuffle(items.map((item) => item.text)),
+      correctText: answer.text
+    };
+  }
+
+  if (mode === "spelling") {
+    return {
+      source,
+      mode,
+      answer,
+      title: "스펠링 고르기",
+      question: makeBlankWord(answer.text),
+      choices: shuffle([answer.text, ...makeSpellingDistractors(answer.text)]),
+      correctText: answer.text
+    };
+  }
+
+  return {
+    source,
+    mode,
+    answer,
+    title: "단어 뜻 맞히기",
+    question: answer.text,
+    choices: shuffle(items.map((item) => item.meaning)),
+    correctText: answer.meaning
+  };
+}
+
+function renderQuizQuestion(quiz, isOnline) {
+  quizModeLabel.textContent = isOnline ? "온라인 랜덤" : "오프라인 복습";
+  onlineQuizStatus.textContent = isOnline ? "ONLINE" : "OFFLINE";
+  onlineQuizStatus.classList.toggle("offline", !isOnline);
+  nextQuiz.disabled = false;
 
   quizBox.innerHTML = `
-    <h3>${escapeHtml(answer.text)}</h3>
-    <p>가장 알맞은 쉬운 뜻을 고르세요.</p>
-    ${choices.map((choice) => `<button class="choice" type="button">${escapeHtml(choice)}</button>`).join("")}
+    <p class="quiz-meta">${escapeHtml(quiz.title)}</p>
+    <h3>${escapeHtml(quiz.question)}</h3>
+    <p class="quiz-question">${getQuizHelpText(quiz)}</p>
+    ${quiz.choices.map((choice) => `<button class="choice" type="button">${escapeHtml(choice)}</button>`).join("")}
     <p class="feedback" aria-live="polite"></p>
   `;
 
   quizBox.querySelectorAll(".choice").forEach((button) => {
     button.addEventListener("click", async () => {
-      const isCorrect = button.textContent === answer.meaning;
+      const isCorrect = button.textContent === quiz.correctText;
       button.classList.add(isCorrect ? "correct" : "wrong");
-      quizBox.querySelector(".feedback").textContent = isCorrect ? "정답입니다!" : `정답은 "${answer.meaning}" 입니다.`;
-      await saveQuizResult(answer.id, isCorrect);
+      quizBox.querySelector(".feedback").textContent = isCorrect
+        ? `정답입니다! 예문: ${quiz.answer.example}`
+        : `정답은 "${quiz.correctText}" 입니다.`;
+
+      await saveQuizResult(quiz.answer.id, isCorrect);
       await markStudy(1);
     });
   });
 }
 
+function getQuizHelpText(quiz) {
+  if (quiz.mode === "reverse") {
+    return "뜻에 가장 잘 맞는 영어 단어를 고르세요.";
+  }
+
+  if (quiz.mode === "spelling") {
+    return "빈칸에 들어갈 정확한 스펠링을 고르세요.";
+  }
+
+  return "영어 단어에 가장 잘 맞는 뜻을 고르세요.";
+}
+
+function makeBlankWord(word) {
+  if (word.length <= 3) {
+    return `${word[0]} _ ${word[word.length - 1]}`;
+  }
+
+  const middle = "_".repeat(Math.min(4, word.length - 2));
+  return `${word[0]}${middle}${word[word.length - 1]}`;
+}
+
+function makeSpellingDistractors(word) {
+  const letters = word.split("");
+  const swapped = [...letters];
+  if (swapped.length > 3) {
+    [swapped[1], swapped[2]] = [swapped[2], swapped[1]];
+  }
+
+  const dropped = letters.filter((_, index) => index !== Math.max(1, Math.floor(letters.length / 2))).join("");
+  const doubled = `${word}${word[word.length - 1]}`;
+  return [...new Set([swapped.join(""), dropped, doubled])].filter((item) => item !== word).slice(0, 3);
+}
+
 async function saveQuizResult(answerId, isCorrect) {
+  if (!answerId || answerId.startsWith("online-") || answerId.startsWith("starter-")) {
+    return;
+  }
+
   const words = await getWords();
   const nextWords = words.map((entry) => {
     if (entry.id !== answerId) {
