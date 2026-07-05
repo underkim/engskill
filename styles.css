@@ -183,6 +183,39 @@ textarea:focus {
   margin: 12px 0;
 }
 
+.learn-tools,
+.lesson-shortcuts {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.learn-tools {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.lesson-shortcuts {
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 12px;
+}
+
+.tool-pill {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.tool-pill.active {
+  border-color: var(--primary);
+  background: var(--soft);
+  color: var(--primary);
+}
+
 button {
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
@@ -280,6 +313,56 @@ button {
 
 .explain-card li {
   margin-bottom: 6px;
+}
+
+.lesson-summary {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.level-badge {
+  width: fit-content;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.lesson-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.lesson-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 12px;
+}
+
+.lesson-card h3 {
+  margin-bottom: 8px;
+  color: var(--primary);
+}
+
+.lesson-card p:last-child,
+.lesson-card ul:last-child {
+  margin-bottom: 0;
+}
+
+.toast {
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #166534;
+  margin-bottom: 10px;
+  padding: 9px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .empty {

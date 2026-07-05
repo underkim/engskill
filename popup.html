@@ -61,13 +61,25 @@
         <label class="field-label" for="englishInput">영어 단어 또는 문장</label>
         <textarea id="englishInput" rows="4" placeholder="웹페이지에서 영어 문장을 선택하거나 여기에 직접 입력하세요."></textarea>
 
+        <div class="learn-tools" aria-label="학습 도구">
+          <button class="tool-pill active" data-level="easy" type="button">아주 쉽게</button>
+          <button class="tool-pill" data-level="normal" type="button">문장 구조</button>
+          <button class="tool-pill" data-level="speak" type="button">말하기 연습</button>
+        </div>
+
         <div class="actions">
-          <button class="primary" id="explainButton" type="button">쉽게 설명</button>
+          <button class="primary" id="explainButton" type="button">학습 시작</button>
           <button class="secondary" id="saveButton" type="button">단어장 저장</button>
         </div>
 
+        <div class="lesson-shortcuts">
+          <button class="secondary compact" id="sampleLesson" type="button">예문 넣기</button>
+          <button class="secondary compact" id="speakInput" type="button">소리 듣기</button>
+          <button class="secondary compact" id="copyPractice" type="button">연습문장 복사</button>
+        </div>
+
         <article class="explain-card" id="explanation">
-          <p class="empty">영어를 입력하면 초보자용 뜻, 핵심 단어, 예문을 보여드립니다.</p>
+          <p class="empty">영어를 입력하면 뜻, 단어, 문장 구조, 말하기 연습, 변형 문장을 한 번에 학습합니다.</p>
         </article>
       </section>
 

@@ -3,6 +3,9 @@ const explanation = document.querySelector("#explanation");
 const saveButton = document.querySelector("#saveButton");
 const explainButton = document.querySelector("#explainButton");
 const refreshSelection = document.querySelector("#refreshSelection");
+const sampleLesson = document.querySelector("#sampleLesson");
+const speakInput = document.querySelector("#speakInput");
+const copyPractice = document.querySelector("#copyPractice");
 const wordList = document.querySelector("#wordList");
 const clearWords = document.querySelector("#clearWords");
 const quizBox = document.querySelector("#quizBox");
@@ -15,6 +18,7 @@ const planGrid = document.querySelector("#planGrid");
 const quizModeLabel = document.querySelector("#quizModeLabel");
 const onlineQuizStatus = document.querySelector("#onlineQuizStatus");
 const tabs = document.querySelectorAll(".tab");
+const lessonLevelButtons = document.querySelectorAll(".tool-pill");
 const panels = {
   coach: document.querySelector("#coachPanel"),
   learn: document.querySelector("#learnPanel"),
@@ -25,6 +29,8 @@ const panels = {
 const DAILY_GOAL = 5;
 const RANDOM_WORD_URL = "https://random-word-api.herokuapp.com/word?number=12";
 const DICTIONARY_URL = "https://api.dictionaryapi.dev/api/v2/entries/en/";
+let selectedLessonLevel = "easy";
+let lastPracticeSentence = "";
 
 const beginnerDictionary = {
   hello: "안녕하세요",
@@ -75,6 +81,27 @@ const beginnerDictionary = {
   use: "사용하다"
 };
 
+const phraseDictionary = {
+  "i want": "나는 원해요",
+  "i need": "나는 필요해요",
+  "i like": "나는 좋아해요",
+  "i can": "나는 할 수 있어요",
+  "can you": "당신은 할 수 있나요?",
+  "do you": "당신은 하나요?",
+  "i have": "나는 가지고 있어요",
+  "let's": "우리 ~하자",
+  "there is": "~이 있어요",
+  "this is": "이것은 ~입니다"
+};
+
+const learningSamples = [
+  "I want to practice English every day.",
+  "Can you help me with this sentence?",
+  "I need more time to speak slowly.",
+  "This is easy when I practice every day.",
+  "I can learn English step by step."
+];
+
 const starterDeck = [
   makeStarter("I want water.", "나는 물을 원해요.", "I want coffee."),
   makeStarter("Can you help me?", "저를 도와줄 수 있나요?", "Can you call me?"),
@@ -105,9 +132,48 @@ tabs.forEach((tab) => {
   tab.addEventListener("click", () => switchTab(tab.dataset.tab));
 });
 
+lessonLevelButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    selectedLessonLevel = button.dataset.level;
+    lessonLevelButtons.forEach((item) => item.classList.toggle("active", item === button));
+    if (input.value.trim()) {
+      renderExplanation(input.value);
+    }
+  });
+});
+
 explainButton.addEventListener("click", async () => {
   renderExplanation(input.value);
   await markStudy(1);
+});
+
+sampleLesson.addEventListener("click", () => {
+  input.value = sample(learningSamples);
+  renderExplanation(input.value);
+});
+
+speakInput.addEventListener("click", () => {
+  const text = input.value.trim();
+  if (!text) {
+    renderEmpty("먼저 영어 문장을 입력하면 소리를 들을 수 있습니다.");
+    return;
+  }
+
+  speakText(text);
+});
+
+copyPractice.addEventListener("click", async () => {
+  if (!lastPracticeSentence) {
+    renderEmpty("먼저 학습을 시작하면 복사할 연습문장이 만들어집니다.");
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(lastPracticeSentence);
+    renderToast("연습문장을 복사했습니다.");
+  } catch (_error) {
+    renderToast(`복사 대신 이 문장을 직접 따라 써보세요: ${lastPracticeSentence}`);
+  }
 });
 
 saveButton.addEventListener("click", async () => {
@@ -188,30 +254,197 @@ async function getActiveTabSelection() {
 }
 
 function renderExplanation(text) {
-  const entry = buildEntry(text);
-  if (!entry.text) {
+  const lesson = buildLesson(text, selectedLessonLevel);
+  const entry = lesson.entry;
+  if (!lesson.text) {
     renderEmpty("영어를 입력하면 초보자용 뜻, 핵심 단어, 따라 말하기 문장을 보여드립니다.");
     return;
   }
 
-  const keyWords = extractKnownWords(entry.text);
-  const keyWordItems = keyWords.length
-    ? keyWords.map((word) => `<li><strong>${escapeHtml(word)}</strong>: ${escapeHtml(beginnerDictionary[word])}</li>`).join("")
-    : "<li>아는 단어가 적어도 괜찮아요. 문장을 짧게 나눠서 천천히 읽어보세요.</li>";
+  lastPracticeSentence = lesson.practice[0] || entry.example;
 
   explanation.innerHTML = `
-    <h3>쉬운 뜻</h3>
-    <p>${escapeHtml(entry.meaning)}</p>
-    <h3>핵심 단어</h3>
-    <ul>${keyWordItems}</ul>
-    <h3>따라 말하기</h3>
-    <p class="speak-line">${escapeHtml(entry.example)}</p>
-    <p class="tip">소리 내어 3번 읽으면 오늘 목표가 더 빨리 쌓입니다.</p>
+    <div class="lesson-summary">
+      <span class="level-badge">${escapeHtml(lesson.levelLabel)}</span>
+      <strong>${escapeHtml(lesson.goal)}</strong>
+    </div>
+    <div class="lesson-grid">
+      <section class="lesson-card">
+        <h3>1. 쉬운 뜻</h3>
+        <p>${escapeHtml(lesson.meaning)}</p>
+      </section>
+      <section class="lesson-card">
+        <h3>2. 문장 쪼개기</h3>
+        <ul>${lesson.chunks.map((chunk) => `<li>${escapeHtml(chunk)}</li>`).join("")}</ul>
+      </section>
+      <section class="lesson-card">
+        <h3>3. 핵심 단어</h3>
+        <ul>${lesson.words.map((word) => `<li><strong>${escapeHtml(word.word)}</strong>: ${escapeHtml(word.meaning)}</li>`).join("")}</ul>
+      </section>
+      <section class="lesson-card">
+        <h3>4. 말하기 연습</h3>
+        <p class="speak-line">${escapeHtml(lesson.speakLine)}</p>
+        <button class="secondary compact speak-now" type="button">문장 듣기</button>
+      </section>
+      <section class="lesson-card">
+        <h3>5. 바꿔 말하기</h3>
+        <ul>${lesson.practice.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </section>
+      <section class="lesson-card">
+        <h3>6. 미니 체크</h3>
+        <p>${escapeHtml(lesson.checkQuestion)}</p>
+        <p class="tip">${escapeHtml(lesson.checkAnswer)}</p>
+      </section>
+    </div>
+    <p class="tip">추천: 뜻을 보고, 소리 내어 3번 읽고, 바꿔 말하기 문장 1개를 직접 말해보세요.</p>
   `;
+
+  explanation.querySelector(".speak-now").addEventListener("click", () => speakText(lesson.speakLine));
 }
 
 function renderEmpty(message) {
   explanation.innerHTML = `<p class="empty">${escapeHtml(message)}</p>`;
+}
+
+function renderToast(message) {
+  explanation.insertAdjacentHTML("afterbegin", `<p class="toast">${escapeHtml(message)}</p>`);
+}
+
+function buildLesson(rawText, level) {
+  const entry = buildEntry(rawText);
+  const text = entry.text;
+  const words = extractWords(text);
+  const knownWords = buildWordList(text);
+  const phrase = findKnownPhrase(text);
+  const levelLabel = level === "normal" ? "구조 분석" : level === "speak" ? "말하기 집중" : "초보 모드";
+  const goal = level === "speak"
+    ? "이 문장을 입으로 바로 말할 수 있게 연습합니다."
+    : level === "normal"
+      ? "문장의 뼈대를 보고 스스로 해석하는 힘을 키웁니다."
+      : "어렵게 외우지 않고 쉬운 뜻부터 잡습니다.";
+
+  return {
+    entry,
+    text,
+    levelLabel,
+    goal,
+    meaning: makeBeginnerMeaning(text, knownWords, phrase),
+    chunks: makeChunks(text, words, phrase),
+    words: knownWords.length ? knownWords : [{ word: words[0] || text, meaning: "새 표현입니다. 문장째로 익혀보세요." }],
+    speakLine: makeSpeakLine(text, level),
+    practice: makePracticeSentences(text, words),
+    checkQuestion: makeCheckQuestion(text, words),
+    checkAnswer: makeCheckAnswer(words, knownWords)
+  };
+}
+
+function buildWordList(text) {
+  const uniqueWords = [...new Set(extractWords(text))];
+  return uniqueWords
+    .filter((word) => beginnerDictionary[word])
+    .slice(0, 6)
+    .map((word) => ({ word, meaning: beginnerDictionary[word] }));
+}
+
+function findKnownPhrase(text) {
+  const lowerText = text.toLowerCase();
+  return Object.entries(phraseDictionary).find(([phrase]) => lowerText.includes(phrase));
+}
+
+function makeBeginnerMeaning(text, knownWords, phrase) {
+  if (phrase) {
+    return `"${phrase[0]}"는 "${phrase[1]}"라는 시작 표현입니다. 나머지 단어를 붙여 전체 뜻을 완성하면 됩니다.`;
+  }
+
+  if (knownWords.length) {
+    return knownWords.map((item) => `${item.word} = ${item.meaning}`).join(", ");
+  }
+
+  return `"${text}"는 아직 기본 사전에 없는 표현입니다. 먼저 소리 내어 읽고, 통째로 저장해서 반복하세요.`;
+}
+
+function makeChunks(text, words, phrase) {
+  if (!words.length) {
+    return ["영어 문장을 입력하면 의미 단위로 쪼개드립니다."];
+  }
+
+  const chunks = [];
+  if (phrase) {
+    chunks.push(`${phrase[0]} = ${phrase[1]}`);
+  }
+
+  chunks.push(`주어 후보: ${findSubject(words)}`);
+  chunks.push(`동작 후보: ${findVerb(words)}`);
+
+  if (words.length > 2) {
+    chunks.push(`나머지 정보: ${words.slice(2).join(" ")}`);
+  }
+
+  return chunks;
+}
+
+function findSubject(words) {
+  const subjectWords = ["i", "you", "we", "they", "he", "she", "it", "this", "that"];
+  return words.find((word) => subjectWords.includes(word)) || words[0] || "없음";
+}
+
+function findVerb(words) {
+  const verbWords = ["want", "need", "like", "can", "have", "go", "come", "see", "know", "think", "feel", "use", "learn", "study", "practice", "speak", "listen", "read", "write", "make", "take", "give", "help", "start", "finish", "work"];
+  return words.find((word) => verbWords.includes(word)) || words[1] || "찾는 중";
+}
+
+function makeSpeakLine(text, level) {
+  if (level === "speak") {
+    return `${text} / 천천히 한 번, 자연스럽게 한 번, 마지막으로 보지 않고 한 번`;
+  }
+
+  return text;
+}
+
+function makePracticeSentences(text, words) {
+  const base = text.replace(/[.!?]+$/, "");
+  const verb = findVerb(words);
+
+  if (verb === "want") {
+    return ["I want water.", "I want more time.", "I want to practice English."];
+  }
+
+  if (verb === "need") {
+    return ["I need help.", "I need more time.", "I need to study today."];
+  }
+
+  if (verb === "like") {
+    return ["I like this.", "I like English.", "I like this sentence."];
+  }
+
+  if (words.includes("can")) {
+    return ["I can do it.", "Can you help me?", "I can practice today."];
+  }
+
+  return [base, `I can say: ${base}.`, `Today I practice: ${base}.`];
+}
+
+function makeCheckQuestion(_text, words) {
+  const verb = findVerb(words);
+  return `"${verb}"가 이 문장에서 어떤 역할을 하나요?`;
+}
+
+function makeCheckAnswer(words, knownWords) {
+  const verb = findVerb(words);
+  const known = knownWords.find((item) => item.word === verb);
+  return known ? `답: ${verb} = ${known.meaning}` : "답: 문장의 동작을 나타내는 핵심 단어입니다.";
+}
+
+function speakText(text) {
+  if (!text || !("speechSynthesis" in window)) {
+    return;
+  }
+
+  speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text.replace(/\s\/\s.*$/, ""));
+  utterance.lang = "en-US";
+  utterance.rate = 0.78;
+  speechSynthesis.speak(utterance);
 }
 
 function buildEntry(rawText) {
