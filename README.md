@@ -8,6 +8,8 @@ Easy English Coach is a Chrome extension for beginner English learners. It is de
 - Show a small in-page action bubble after selecting English text.
 - Start learning from the bubble, extension popup, or right-click menu.
 - Save captured web expressions to the wordbook with their source page.
+- Search, filter, and mark wordbook items as learning, confused, or mastered.
+- Prioritize confused and learning items during offline review quizzes.
 - Enrich saved words with online dictionary definitions and examples when available.
 - Break sentences into beginner-friendly steps: meaning, chunks, key words, speaking, variations, and mini checks.
 - Practice with online random quizzes and offline fallback questions.

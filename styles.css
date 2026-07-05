@@ -532,6 +532,24 @@ button {
   list-style: none;
 }
 
+.wordbook-tools {
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.wordbook-tools input,
+.wordbook-tools select {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0 10px;
+  font: inherit;
+}
+
 .word-item {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -572,6 +590,40 @@ button {
 .source-meta {
   color: var(--muted);
   word-break: break-word;
+}
+
+.source-link {
+  display: block;
+  margin-top: 8px;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-decoration: none;
+  word-break: break-word;
+}
+
+.word-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.word-actions button {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 4px;
+}
+
+.word-actions button:hover {
+  border-color: var(--primary);
 }
 
 .speak-line {

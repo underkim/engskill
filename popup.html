@@ -122,6 +122,15 @@
           <h2>내 단어장</h2>
           <button class="text-button" id="clearWords" type="button">전체 삭제</button>
         </div>
+        <div class="wordbook-tools">
+          <input id="wordbookSearch" type="search" placeholder="저장한 표현 검색">
+          <select id="wordbookFilter" aria-label="단어장 필터">
+            <option value="all">전체</option>
+            <option value="learning">학습중</option>
+            <option value="confused">헷갈림</option>
+            <option value="mastered">외움</option>
+          </select>
+        </div>
         <ul class="word-list" id="wordList"></ul>
       </section>
 

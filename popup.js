@@ -10,6 +10,8 @@ const sampleLesson = document.querySelector("#sampleLesson");
 const speakInput = document.querySelector("#speakInput");
 const copyPractice = document.querySelector("#copyPractice");
 const wordList = document.querySelector("#wordList");
+const wordbookSearch = document.querySelector("#wordbookSearch");
+const wordbookFilter = document.querySelector("#wordbookFilter");
 const clearWords = document.querySelector("#clearWords");
 const quizBox = document.querySelector("#quizBox");
 const nextQuiz = document.querySelector("#nextQuiz");
@@ -47,6 +49,8 @@ let selectedLessonLevel = "easy";
 let lastPracticeSentence = "";
 let recommendedCoachAction = "learn";
 let currentSource = null;
+let currentWordbookFilter = "all";
+let currentWordbookSearch = "";
 
 const beginnerDictionary = {
   hello: "안녕하세요",
@@ -200,6 +204,16 @@ copyPractice.addEventListener("click", async () => {
 
 saveButton.addEventListener("click", saveCurrentTextToWordbook);
 
+wordbookSearch.addEventListener("input", () => {
+  currentWordbookSearch = wordbookSearch.value.trim().toLowerCase();
+  renderWordbook();
+});
+
+wordbookFilter.addEventListener("change", () => {
+  currentWordbookFilter = wordbookFilter.value;
+  renderWordbook();
+});
+
 clearWords.addEventListener("click", async () => {
   await chrome.storage.local.set({ words: [] });
   await renderWordbook();
@@ -345,8 +359,8 @@ async function saveCurrentTextToWordbook(options = {}) {
   const words = await getWords();
   const exists = words.some((item) => item.text.toLowerCase() === entry.text.toLowerCase());
   const nextWords = exists
-    ? words.map((item) => item.text.toLowerCase() === entry.text.toLowerCase() ? { ...item, ...entry, id: item.id } : item)
-    : [entry, ...words];
+    ? words.map((item) => item.text.toLowerCase() === entry.text.toLowerCase() ? mergeWordEntry(item, entry) : item)
+    : [{ ...entry, status: "learning" }, ...words];
 
   await chrome.storage.local.set({ words: nextWords });
   await markStudy(1);
@@ -462,6 +476,19 @@ function buildEntry(rawText) {
     reviewCount: 0,
     correctCount: 0,
     createdAt: Date.now()
+  };
+}
+
+function mergeWordEntry(existing, nextEntry) {
+  return {
+    ...existing,
+    ...nextEntry,
+    id: existing.id,
+    reviewCount: existing.reviewCount || 0,
+    correctCount: existing.correctCount || 0,
+    status: existing.status || "learning",
+    createdAt: existing.createdAt || nextEntry.createdAt,
+    updatedAt: Date.now()
   };
 }
 
@@ -625,15 +652,28 @@ async function renderWordbook() {
     return;
   }
 
-  wordList.innerHTML = words.map((entry) => `
+  const filteredWords = filterWordbook(words);
+  if (!filteredWords.length) {
+    wordList.innerHTML = '<li class="empty">조건에 맞는 저장 표현이 없습니다.</li>';
+    return;
+  }
+
+  wordList.innerHTML = filteredWords.map((entry) => `
     <li class="word-item">
       <div class="word-top">
         <p class="word-text">${escapeHtml(entry.text)}</p>
         <button class="remove-word" type="button" data-id="${entry.id}">삭제</button>
       </div>
       <p class="word-meaning">${escapeHtml(entry.meaning)}</p>
-      <p class="review-meta">복습 ${entry.reviewCount || 0}회 · 정답 ${entry.correctCount || 0}회</p>
-      ${entry.source?.url ? `<p class="source-meta">출처: ${escapeHtml(entry.source.title || "Web page")}</p>` : ""}
+      <p class="review-meta">상태 ${getStatusLabel(entry.status)} · 복습 ${entry.reviewCount || 0}회 · 정답 ${entry.correctCount || 0}회${entry.partOfSpeech ? ` · ${escapeHtml(entry.partOfSpeech)}` : ""}</p>
+      ${entry.example ? `<p class="source-meta">예문: ${escapeHtml(entry.example)}</p>` : ""}
+      ${entry.source?.url ? `<a class="source-link" href="${escapeHtml(entry.source.url)}" target="_blank" rel="noreferrer">원문 열기: ${escapeHtml(entry.source.title || "Web page")}</a>` : ""}
+      <div class="word-actions">
+        <button class="mark-word" type="button" data-id="${entry.id}" data-status="learning">학습중</button>
+        <button class="mark-word" type="button" data-id="${entry.id}" data-status="confused">헷갈림</button>
+        <button class="mark-word" type="button" data-id="${entry.id}" data-status="mastered">외움</button>
+        <button class="practice-word" type="button" data-id="${entry.id}">다시 학습</button>
+      </div>
     </li>
   `).join("");
 
@@ -646,6 +686,68 @@ async function renderWordbook() {
       await renderQuiz();
     });
   });
+
+  document.querySelectorAll(".mark-word").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await updateWordStatus(button.dataset.id, button.dataset.status);
+    });
+  });
+
+  document.querySelectorAll(".practice-word").forEach((button) => {
+    button.addEventListener("click", () => {
+      const entry = words.find((word) => word.id === button.dataset.id);
+      if (!entry) {
+        return;
+      }
+
+      input.value = entry.text;
+      currentSource = entry.source || null;
+      renderSource();
+      renderExplanation(entry.text);
+      switchTab("learn");
+    });
+  });
+}
+
+function filterWordbook(words) {
+  return words.filter((entry) => {
+    const status = entry.status || "learning";
+    const matchesFilter = currentWordbookFilter === "all" || status === currentWordbookFilter;
+    const searchable = `${entry.text} ${entry.meaning} ${entry.example || ""} ${entry.source?.title || ""}`.toLowerCase();
+    const matchesSearch = !currentWordbookSearch || searchable.includes(currentWordbookSearch);
+    return matchesFilter && matchesSearch;
+  });
+}
+
+function getStatusLabel(status = "learning") {
+  if (status === "mastered") {
+    return "외움";
+  }
+
+  if (status === "confused") {
+    return "헷갈림";
+  }
+
+  return "학습중";
+}
+
+async function updateWordStatus(id, status) {
+  const words = await getWords();
+  const nextWords = words.map((entry) => {
+    if (entry.id !== id) {
+      return entry;
+    }
+
+    return {
+      ...entry,
+      status,
+      lastReviewedAt: Date.now()
+    };
+  });
+
+  await chrome.storage.local.set({ words: nextWords });
+  await renderWordbook();
+  await renderCoach();
 }
 
 async function renderCoach() {
@@ -838,7 +940,10 @@ async function fetchJson(url, timeoutMs) {
 
 async function buildOfflineQuiz() {
   const savedWords = await getWords();
-  const quizWords = savedWords.length >= 4 ? savedWords : starterDeck;
+  const confusedWords = savedWords.filter((entry) => entry.status === "confused");
+  const learningWords = savedWords.filter((entry) => (entry.status || "learning") === "learning");
+  const reviewSource = confusedWords.length >= 2 ? confusedWords : [...confusedWords, ...learningWords, ...savedWords];
+  const quizWords = reviewSource.length >= 4 ? reviewSource : starterDeck;
   return makeRandomQuiz(shuffle(quizWords).slice(0, 4));
 }
 
