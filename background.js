@@ -47,7 +47,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     text: message.text,
     source: message.source || {},
     pendingSave: Boolean(message.saveIntent)
-  }).then(() => sendResponse({ ok: true }));
+  }).then(async () => {
+    if (message.openPopup) {
+      try {
+        await chrome.action.openPopup();
+      } catch (_error) {
+        // The selection is still captured; the user can open the popup manually.
+      }
+    }
+
+    sendResponse({ ok: true });
+  });
 
   return true;
 });
