@@ -40,16 +40,41 @@
       </nav>
 
       <section class="panel active" id="coachPanel">
-        <div class="section-heading">
-          <h2>오늘 할 일</h2>
-          <button class="secondary compact" id="completeRoutine" type="button">5분 루틴 완료</button>
+        <div class="coach-hero">
+          <p class="daily-label">오늘의 코칭</p>
+          <h2 id="coachTitle">지금 할 일을 추천합니다</h2>
+          <p id="coachMessage">학습 상태를 보고 가장 효과적인 다음 행동을 안내합니다.</p>
+          <button class="primary full" id="coachPrimaryAction" type="button">추천 학습 시작</button>
         </div>
-        <ol class="routine-list">
-          <li>영어 문장 하나 선택하기</li>
-          <li>쉬운 뜻 확인하기</li>
-          <li>따라 말할 문장 1개 저장하기</li>
-          <li>퀴즈 3문제 풀기</li>
-        </ol>
+
+        <div class="coach-stats" aria-label="학습 진단">
+          <article>
+            <span id="coachSavedCount">0</span>
+            <p>저장 표현</p>
+          </article>
+          <article>
+            <span id="coachReviewCount">0</span>
+            <p>복습 횟수</p>
+          </article>
+          <article>
+            <span id="coachAccuracy">0%</span>
+            <p>정답률</p>
+          </article>
+        </div>
+
+        <div class="coach-actions">
+          <button class="secondary" id="coachLearnAction" type="button">문장 학습</button>
+          <button class="secondary" id="coachQuizAction" type="button">랜덤 퀴즈</button>
+          <button class="secondary" id="coachReviewAction" type="button">단어장 복습</button>
+        </div>
+
+        <section class="coach-next">
+          <div class="section-heading">
+            <h2>다음 5분 루틴</h2>
+            <button class="secondary compact" id="completeRoutine" type="button">완료 처리</button>
+          </div>
+          <ol class="routine-list" id="coachRoutineList"></ol>
+        </section>
 
         <div class="sprint">
           <h2>7일 단기 성장 플랜</h2>

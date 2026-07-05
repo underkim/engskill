@@ -15,6 +15,16 @@ const streakCount = document.querySelector("#streakCount");
 const progressBar = document.querySelector("#progressBar");
 const completeRoutine = document.querySelector("#completeRoutine");
 const planGrid = document.querySelector("#planGrid");
+const coachTitle = document.querySelector("#coachTitle");
+const coachMessage = document.querySelector("#coachMessage");
+const coachPrimaryAction = document.querySelector("#coachPrimaryAction");
+const coachSavedCount = document.querySelector("#coachSavedCount");
+const coachReviewCount = document.querySelector("#coachReviewCount");
+const coachAccuracy = document.querySelector("#coachAccuracy");
+const coachRoutineList = document.querySelector("#coachRoutineList");
+const coachLearnAction = document.querySelector("#coachLearnAction");
+const coachQuizAction = document.querySelector("#coachQuizAction");
+const coachReviewAction = document.querySelector("#coachReviewAction");
 const quizModeLabel = document.querySelector("#quizModeLabel");
 const onlineQuizStatus = document.querySelector("#onlineQuizStatus");
 const tabs = document.querySelectorAll(".tab");
@@ -31,6 +41,7 @@ const RANDOM_WORD_URL = "https://random-word-api.herokuapp.com/word?number=12";
 const DICTIONARY_URL = "https://api.dictionaryapi.dev/api/v2/entries/en/";
 let selectedLessonLevel = "easy";
 let lastPracticeSentence = "";
+let recommendedCoachAction = "learn";
 
 const beginnerDictionary = {
   hello: "안녕하세요",
@@ -125,6 +136,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderSprintPlan();
   await renderWordbook();
   await renderProgress();
+  await renderCoach();
   await renderQuiz();
 });
 
@@ -191,6 +203,7 @@ saveButton.addEventListener("click", async () => {
   await chrome.storage.local.set({ words: nextWords });
   await markStudy(1);
   await renderWordbook();
+  await renderCoach();
   switchTab("wordbook");
 });
 
@@ -210,6 +223,7 @@ refreshSelection.addEventListener("click", async () => {
 clearWords.addEventListener("click", async () => {
   await chrome.storage.local.set({ words: [] });
   await renderWordbook();
+  await renderCoach();
   await renderQuiz();
 });
 
@@ -218,7 +232,13 @@ nextQuiz.addEventListener("click", renderQuiz);
 completeRoutine.addEventListener("click", async () => {
   await markStudy(DAILY_GOAL);
   await renderProgress();
+  await renderCoach();
 });
+
+coachPrimaryAction.addEventListener("click", () => runCoachAction(recommendedCoachAction));
+coachLearnAction.addEventListener("click", () => runCoachAction("learn"));
+coachQuizAction.addEventListener("click", () => runCoachAction("quiz"));
+coachReviewAction.addEventListener("click", () => runCoachAction("review"));
 
 function switchTab(tabName) {
   tabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === tabName));
@@ -508,9 +528,128 @@ async function renderWordbook() {
       const nextWords = words.filter((entry) => entry.id !== button.dataset.id);
       await chrome.storage.local.set({ words: nextWords });
       await renderWordbook();
+      await renderCoach();
       await renderQuiz();
     });
   });
+}
+
+async function renderCoach() {
+  const words = await getWords();
+  const stats = await getStats();
+  const totalReviews = words.reduce((sum, entry) => sum + (entry.reviewCount || 0), 0);
+  const totalCorrect = words.reduce((sum, entry) => sum + (entry.correctCount || 0), 0);
+  const accuracy = totalReviews ? Math.round((totalCorrect / totalReviews) * 100) : 0;
+  const todayCount = Math.min(DAILY_GOAL, stats.todayCount || 0);
+  const diagnosis = getCoachDiagnosis(words, stats, totalReviews, accuracy);
+
+  recommendedCoachAction = diagnosis.action;
+  coachTitle.textContent = diagnosis.title;
+  coachMessage.textContent = diagnosis.message;
+  coachPrimaryAction.textContent = diagnosis.button;
+  coachSavedCount.textContent = words.length;
+  coachReviewCount.textContent = totalReviews;
+  coachAccuracy.textContent = `${accuracy}%`;
+  coachRoutineList.innerHTML = getCoachRoutine(diagnosis.action, todayCount).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+}
+
+function getCoachDiagnosis(words, stats, totalReviews, accuracy) {
+  const todayCount = stats.todayCount || 0;
+
+  if (todayCount >= DAILY_GOAL) {
+    return {
+      action: "review",
+      title: "오늘 목표는 완료했습니다",
+      message: "이제 새로 더 넣기보다 저장한 표현을 짧게 복습하면 기억이 오래갑니다.",
+      button: "단어장 복습하기"
+    };
+  }
+
+  if (words.length < 3) {
+    return {
+      action: "learn",
+      title: "먼저 내 문장을 3개 모으세요",
+      message: "초보자는 남의 단어보다 내가 본 문장을 저장할 때 훨씬 빨리 늡니다.",
+      button: "문장 하나 학습하기"
+    };
+  }
+
+  if (totalReviews < words.length) {
+    return {
+      action: "quiz",
+      title: "저장한 표현을 바로 확인하세요",
+      message: "저장만 하면 잊어버립니다. 퀴즈로 한 번 꺼내야 실력이 됩니다.",
+      button: "퀴즈로 확인하기"
+    };
+  }
+
+  if (accuracy && accuracy < 70) {
+    return {
+      action: "review",
+      title: "정답률을 먼저 올려야 합니다",
+      message: "새 표현보다 헷갈린 표현을 다시 보는 것이 지금은 더 효과적입니다.",
+      button: "약한 표현 복습하기"
+    };
+  }
+
+  return {
+    action: "quiz",
+    title: "새 랜덤 문제로 실전 감각을 늘리세요",
+    message: "기본 루틴은 잡혔습니다. 온라인 랜덤 퀴즈로 낯선 단어에 익숙해지세요.",
+    button: "랜덤 퀴즈 풀기"
+  };
+}
+
+function getCoachRoutine(action, todayCount) {
+  const remaining = Math.max(0, DAILY_GOAL - todayCount);
+
+  if (action === "learn") {
+    return [
+      "예문 넣기 또는 웹페이지 문장 선택",
+      "학습 시작으로 뜻과 구조 확인",
+      "소리 듣고 3번 따라 말하기",
+      "바꿔 말하기 문장 1개 저장",
+      `오늘 남은 목표 ${remaining}개 채우기`
+    ];
+  }
+
+  if (action === "review") {
+    return [
+      "단어장에서 오래 안 본 표현 확인",
+      "뜻을 가리고 영어만 먼저 읽기",
+      "소리 내어 3번 말하기",
+      "헷갈린 표현을 다시 저장",
+      `오늘 남은 목표 ${remaining}개 채우기`
+    ];
+  }
+
+  return [
+    "온라인 랜덤 퀴즈 1문제 풀기",
+    "틀린 단어를 소리 내어 읽기",
+    "예문을 한 번 따라 말하기",
+    "필요한 표현은 단어장에 저장",
+    `오늘 남은 목표 ${remaining}개 채우기`
+  ];
+}
+
+function runCoachAction(action) {
+  if (action === "learn") {
+    switchTab("learn");
+    if (!input.value.trim()) {
+      input.value = sample(learningSamples);
+      renderExplanation(input.value);
+    }
+    input.focus();
+    return;
+  }
+
+  if (action === "review") {
+    switchTab("wordbook");
+    return;
+  }
+
+  switchTab("quiz");
+  renderQuiz();
 }
 
 async function renderQuiz() {
@@ -658,6 +797,7 @@ function renderQuizQuestion(quiz, isOnline) {
 
       await saveQuizResult(quiz.answer.id, isCorrect);
       await markStudy(1);
+      await renderCoach();
     });
   });
 }
@@ -716,6 +856,7 @@ async function saveQuizResult(answerId, isCorrect) {
 
   await chrome.storage.local.set({ words: nextWords });
   await renderWordbook();
+  await renderCoach();
 }
 
 async function markStudy(amount) {

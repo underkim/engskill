@@ -13,6 +13,8 @@ Easy English Coach is a beginner-friendly Chrome extension for learning English 
 - Generate fully random online quizzes from live English word and dictionary APIs.
 - Mix quiz types: choose the meaning, choose the word, and choose the spelling.
 - Track a daily 5-action goal and study streak.
+- Use the Coach tab to get a next-action recommendation based on saved words, review count, accuracy, and today's progress.
+- Jump directly from the Coach tab to sentence learning, random quiz, or wordbook review.
 - Follow a simple 7-day beginner sprint plan.
 - Get a gentle daily reminder when you have not studied yet.
 - Use a right-click menu on any web page.
