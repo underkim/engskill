@@ -285,14 +285,38 @@ async function getActiveTabSelection() {
     return { text: "", source: null };
   }
 
+  const fallbackSource = { title: tab.title || "Web page", url: tab.url || "" };
+
   try {
     const response = await chrome.tabs.sendMessage(tab.id, { type: "GET_SELECTION" });
     return {
       text: response?.text?.trim() || "",
-      source: response?.source || { title: tab.title || "Web page", url: tab.url || "" }
+      source: response?.source || fallbackSource
     };
   } catch (_error) {
-    return { text: "", source: { title: tab.title || "Web page", url: tab.url || "" } };
+    return readSelectionByInjection(tab.id, fallbackSource);
+  }
+}
+
+async function readSelectionByInjection(tabId, fallbackSource) {
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => ({
+        text: window.getSelection()?.toString().trim() || "",
+        source: {
+          title: document.title || "Web page",
+          url: location.href
+        }
+      })
+    });
+
+    return {
+      text: result?.result?.text || "",
+      source: result?.result?.source || fallbackSource
+    };
+  } catch (_error) {
+    return { text: "", source: fallbackSource };
   }
 }
 
@@ -314,7 +338,7 @@ async function saveCurrentTextToWordbook(options = {}) {
     return;
   }
 
-  const entry = buildEntry(text);
+  const entry = await buildOnlineEntry(text);
   entry.source = currentSource || { title: "Manual input", url: "" };
   entry.capturedAt = Date.now();
 
@@ -439,6 +463,37 @@ function buildEntry(rawText) {
     correctCount: 0,
     createdAt: Date.now()
   };
+}
+
+async function buildOnlineEntry(rawText) {
+  const entry = buildEntry(rawText);
+  const lookupWord = getDictionaryLookupWord(entry.text);
+
+  if (!lookupWord) {
+    return entry;
+  }
+
+  const onlineItem = await fetchDictionaryItem(lookupWord);
+  if (!onlineItem) {
+    return entry;
+  }
+
+  return {
+    ...entry,
+    meaning: onlineItem.meaning,
+    example: onlineItem.example,
+    partOfSpeech: onlineItem.partOfSpeech,
+    onlineWord: lookupWord
+  };
+}
+
+function getDictionaryLookupWord(text) {
+  const words = extractWords(text).filter((word) => word.length >= 2);
+  if (!words.length) {
+    return "";
+  }
+
+  return words.length === 1 ? words[0] : words.find((word) => !beginnerDictionary[word]) || words[0];
 }
 
 function buildWordList(text) {
