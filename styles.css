@@ -159,6 +159,30 @@ h2 {
   font-weight: 700;
 }
 
+.web-capture-card {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 12px;
+}
+
+.web-capture-card strong {
+  display: block;
+  margin-bottom: 5px;
+  line-height: 1.35;
+}
+
+.web-capture-card p:not(.daily-label) {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 textarea {
   width: 100%;
   resize: vertical;
@@ -537,11 +561,17 @@ button {
 }
 
 .review-meta,
-.tip {
+.tip,
+.source-meta {
   margin: 8px 0 0;
   color: var(--accent);
   font-size: 12px;
   font-weight: 700;
+}
+
+.source-meta {
+  color: var(--muted);
+  word-break: break-word;
 }
 
 .speak-line {

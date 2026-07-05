@@ -1,10 +1,17 @@
-const CONTEXT_MENU_ID = "easy-english-coach-learn";
+const CONTEXT_MENU_LEARN_ID = "easy-english-coach-learn";
+const CONTEXT_MENU_SAVE_ID = "easy-english-coach-save";
 const DAILY_ALARM_ID = "easy-english-daily-reminder";
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
-    id: CONTEXT_MENU_ID,
-    title: "Easy English Coach로 학습하기",
+    id: CONTEXT_MENU_LEARN_ID,
+    title: "Easy English Coach에서 학습하기",
+    contexts: ["selection"]
+  });
+
+  chrome.contextMenus.create({
+    id: CONTEXT_MENU_SAVE_ID,
+    title: "Easy English Coach 단어장에 넣기",
     contexts: ["selection"]
   });
 
@@ -15,16 +22,34 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.contextMenus.onClicked.addListener(async (info) => {
-  if (info.menuItemId !== CONTEXT_MENU_ID || !info.selectionText) {
+  if (![CONTEXT_MENU_LEARN_ID, CONTEXT_MENU_SAVE_ID].includes(info.menuItemId) || !info.selectionText) {
     return;
   }
 
-  await chrome.storage.local.set({
-    selectedText: info.selectionText.trim(),
-    selectedAt: Date.now()
+  await captureSelection({
+    text: info.selectionText,
+    source: {
+      title: info.pageUrl || "Web page",
+      url: info.pageUrl || ""
+    },
+    pendingSave: info.menuItemId === CONTEXT_MENU_SAVE_ID
   });
 
   chrome.action.openPopup();
+});
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type !== "CAPTURE_SELECTION" || !message.text) {
+    return;
+  }
+
+  captureSelection({
+    text: message.text,
+    source: message.source || {},
+    pendingSave: Boolean(message.saveIntent)
+  }).then(() => sendResponse({ ok: true }));
+
+  return true;
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
@@ -43,9 +68,21 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     type: "basic",
     iconUrl: "icon128.png",
     title: "Easy English Coach",
-    message: "오늘 5분만 영어 루틴을 해볼까요? 짧게 해도 꾸준하면 실력이 쌓입니다."
+    message: "오늘 웹에서 모르는 영어 하나만 선택해서 단어장에 넣어볼까요?"
   });
 });
+
+async function captureSelection({ text, source, pendingSave }) {
+  await chrome.storage.local.set({
+    selectedText: text.trim(),
+    selectedAt: Date.now(),
+    selectedSource: {
+      title: source.title || "Web page",
+      url: source.url || ""
+    },
+    pendingSave
+  });
+}
 
 function getLocalDateKey() {
   const date = new Date();

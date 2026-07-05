@@ -5,6 +5,8 @@ Easy English Coach is a beginner-friendly Chrome extension for learning English 
 ## Features
 
 - Explain selected English text in simple Korean.
+- Capture unknown words or sentences directly from web pages.
+- Save captured web expressions to the wordbook with their source page.
 - Break sentences into beginner-friendly learning steps: meaning, chunks, key words, speaking, variations, and mini checks.
 - Listen to English sentences with slow text-to-speech practice.
 - Use sample lessons and copyable practice sentences.
@@ -25,9 +27,9 @@ Easy English Coach is a beginner-friendly Chrome extension for learning English 
 Use the extension for 5 minutes a day:
 
 1. Select one English sentence on a web page.
-2. Click the refresh button or use the right-click menu.
-3. Read the simple meaning.
-4. Save one useful expression.
+2. Click **선택 문장 가져오기** or use the right-click menu.
+3. Study the simple meaning, chunks, and speaking practice.
+4. Save the expression to the wordbook with its web source.
 5. Solve three random online quiz questions.
 
 The progress bar and streak counter are designed to make steady practice easy.
@@ -47,10 +49,11 @@ If the internet connection or API is unavailable, the extension automatically fa
 
 ## How to Use
 
-1. Select an English word or sentence on a web page.
-2. Right-click and choose **Easy English Coach로 학습하기**.
-3. Open the extension popup to see the simple explanation.
-4. Save useful expressions and practice them in the Quiz tab.
+1. Open any web page with English text.
+2. Drag an unknown word or sentence.
+3. Open the extension and click **선택 문장 가져오기**.
+4. Study the expression and click **단어장에 넣기**.
+5. Or right-click the selection and choose **Easy English Coach 단어장에 넣기**.
 
 ## Project Structure
 

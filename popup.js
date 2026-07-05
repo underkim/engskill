@@ -3,6 +3,9 @@ const explanation = document.querySelector("#explanation");
 const saveButton = document.querySelector("#saveButton");
 const explainButton = document.querySelector("#explainButton");
 const refreshSelection = document.querySelector("#refreshSelection");
+const importSelection = document.querySelector("#importSelection");
+const sourceTitle = document.querySelector("#sourceTitle");
+const sourceUrl = document.querySelector("#sourceUrl");
 const sampleLesson = document.querySelector("#sampleLesson");
 const speakInput = document.querySelector("#speakInput");
 const copyPractice = document.querySelector("#copyPractice");
@@ -39,9 +42,11 @@ const panels = {
 const DAILY_GOAL = 5;
 const RANDOM_WORD_URL = "https://random-word-api.herokuapp.com/word?number=12";
 const DICTIONARY_URL = "https://api.dictionaryapi.dev/api/v2/entries/en/";
+
 let selectedLessonLevel = "easy";
 let lastPracticeSentence = "";
 let recommendedCoachAction = "learn";
+let currentSource = null;
 
 const beginnerDictionary = {
   hello: "안녕하세요",
@@ -159,15 +164,20 @@ explainButton.addEventListener("click", async () => {
   await markStudy(1);
 });
 
+importSelection.addEventListener("click", importSelectedTextFromPage);
+refreshSelection.addEventListener("click", importSelectedTextFromPage);
+
 sampleLesson.addEventListener("click", () => {
   input.value = sample(learningSamples);
+  currentSource = { title: "Sample lesson", url: "" };
+  renderSource();
   renderExplanation(input.value);
 });
 
 speakInput.addEventListener("click", () => {
   const text = input.value.trim();
   if (!text) {
-    renderEmpty("먼저 영어 문장을 입력하면 소리를 들을 수 있습니다.");
+    renderEmpty("먼저 웹페이지에서 영어 문장을 가져오세요.");
     return;
   }
 
@@ -188,37 +198,7 @@ copyPractice.addEventListener("click", async () => {
   }
 });
 
-saveButton.addEventListener("click", async () => {
-  const text = input.value.trim();
-  if (!text) {
-    renderEmpty("저장할 영어를 먼저 입력하세요.");
-    return;
-  }
-
-  const entry = buildEntry(text);
-  const words = await getWords();
-  const exists = words.some((item) => item.text.toLowerCase() === entry.text.toLowerCase());
-  const nextWords = exists ? words : [entry, ...words];
-
-  await chrome.storage.local.set({ words: nextWords });
-  await markStudy(1);
-  await renderWordbook();
-  await renderCoach();
-  switchTab("wordbook");
-});
-
-refreshSelection.addEventListener("click", async () => {
-  const text = await getActiveTabSelection();
-  if (text) {
-    input.value = text;
-    renderExplanation(text);
-    await markStudy(1);
-    switchTab("learn");
-  } else {
-    renderEmpty("현재 페이지에서 선택된 영어 문장을 찾지 못했습니다.");
-    switchTab("learn");
-  }
-});
+saveButton.addEventListener("click", saveCurrentTextToWordbook);
 
 clearWords.addEventListener("click", async () => {
   await chrome.storage.local.set({ words: [] });
@@ -252,24 +232,106 @@ function switchTab(tabName) {
 }
 
 async function loadStoredSelection() {
-  const { selectedText } = await chrome.storage.local.get(["selectedText"]);
-  if (selectedText) {
-    input.value = selectedText;
-    renderExplanation(selectedText);
+  const { selectedText, selectedSource, pendingSave } = await chrome.storage.local.get([
+    "selectedText",
+    "selectedSource",
+    "pendingSave"
+  ]);
+
+  if (!selectedText) {
+    renderSource();
+    return;
   }
+
+  input.value = selectedText;
+  currentSource = selectedSource || null;
+  renderSource();
+  renderExplanation(selectedText);
+  switchTab("learn");
+
+  if (pendingSave) {
+    await saveCurrentTextToWordbook({ stayOnLearn: true });
+    await chrome.storage.local.set({ pendingSave: false });
+  }
+}
+
+async function importSelectedTextFromPage() {
+  const result = await getActiveTabSelection();
+
+  if (!result.text) {
+    renderEmpty("웹페이지에서 모르는 영어 단어 또는 문장을 먼저 드래그하세요.");
+    switchTab("learn");
+    return;
+  }
+
+  input.value = result.text;
+  currentSource = result.source || null;
+  renderSource();
+  renderExplanation(result.text);
+  await chrome.storage.local.set({
+    selectedText: result.text,
+    selectedSource: currentSource,
+    selectedAt: Date.now(),
+    pendingSave: false
+  });
+  await markStudy(1);
+  await renderCoach();
+  switchTab("learn");
 }
 
 async function getActiveTabSelection() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) {
-    return "";
+    return { text: "", source: null };
   }
 
   try {
     const response = await chrome.tabs.sendMessage(tab.id, { type: "GET_SELECTION" });
-    return response?.text?.trim() || "";
+    return {
+      text: response?.text?.trim() || "",
+      source: response?.source || { title: tab.title || "Web page", url: tab.url || "" }
+    };
   } catch (_error) {
-    return "";
+    return { text: "", source: { title: tab.title || "Web page", url: tab.url || "" } };
+  }
+}
+
+function renderSource() {
+  if (!currentSource?.title && !currentSource?.url) {
+    sourceTitle.textContent = "아직 가져온 문장이 없습니다";
+    sourceUrl.textContent = "웹페이지에서 모르는 영어를 드래그한 뒤 가져오세요.";
+    return;
+  }
+
+  sourceTitle.textContent = currentSource.title || "Web page";
+  sourceUrl.textContent = currentSource.url || "출처 URL 없음";
+}
+
+async function saveCurrentTextToWordbook(options = {}) {
+  const text = input.value.trim();
+  if (!text) {
+    renderEmpty("단어장에 넣을 웹페이지 영어를 먼저 가져오세요.");
+    return;
+  }
+
+  const entry = buildEntry(text);
+  entry.source = currentSource || { title: "Manual input", url: "" };
+  entry.capturedAt = Date.now();
+
+  const words = await getWords();
+  const exists = words.some((item) => item.text.toLowerCase() === entry.text.toLowerCase());
+  const nextWords = exists
+    ? words.map((item) => item.text.toLowerCase() === entry.text.toLowerCase() ? { ...item, ...entry, id: item.id } : item)
+    : [entry, ...words];
+
+  await chrome.storage.local.set({ words: nextWords });
+  await markStudy(1);
+  await renderWordbook();
+  await renderCoach();
+  renderToast(exists ? "이미 있던 표현을 최신 출처로 업데이트했습니다." : "웹에서 가져온 표현을 단어장에 넣었습니다.");
+
+  if (!options.stayOnLearn) {
+    switchTab("wordbook");
   }
 }
 
@@ -277,7 +339,7 @@ function renderExplanation(text) {
   const lesson = buildLesson(text, selectedLessonLevel);
   const entry = lesson.entry;
   if (!lesson.text) {
-    renderEmpty("영어를 입력하면 초보자용 뜻, 핵심 단어, 따라 말하기 문장을 보여드립니다.");
+    renderEmpty("웹페이지에서 영어를 가져오면 뜻, 구조, 말하기 연습을 보여드립니다.");
     return;
   }
 
@@ -316,7 +378,7 @@ function renderExplanation(text) {
         <p class="tip">${escapeHtml(lesson.checkAnswer)}</p>
       </section>
     </div>
-    <p class="tip">추천: 뜻을 보고, 소리 내어 3번 읽고, 바꿔 말하기 문장 1개를 직접 말해보세요.</p>
+    <p class="tip">추천 흐름: 웹에서 드래그 → 선택 문장 가져오기 → 학습 시작 → 단어장에 넣기</p>
   `;
 
   explanation.querySelector(".speak-now").addEventListener("click", () => speakText(lesson.speakLine));
@@ -338,10 +400,10 @@ function buildLesson(rawText, level) {
   const phrase = findKnownPhrase(text);
   const levelLabel = level === "normal" ? "구조 분석" : level === "speak" ? "말하기 집중" : "초보 모드";
   const goal = level === "speak"
-    ? "이 문장을 입으로 바로 말할 수 있게 연습합니다."
+    ? "웹에서 본 표현을 입으로 바로 말할 수 있게 연습합니다."
     : level === "normal"
-      ? "문장의 뼈대를 보고 스스로 해석하는 힘을 키웁니다."
-      : "어렵게 외우지 않고 쉬운 뜻부터 잡습니다.";
+      ? "웹 문장의 뼈대를 보고 스스로 해석하는 힘을 키웁니다."
+      : "웹에서 모르는 표현을 쉬운 뜻부터 잡습니다.";
 
   return {
     entry,
@@ -353,8 +415,29 @@ function buildLesson(rawText, level) {
     words: knownWords.length ? knownWords : [{ word: words[0] || text, meaning: "새 표현입니다. 문장째로 익혀보세요." }],
     speakLine: makeSpeakLine(text, level),
     practice: makePracticeSentences(text, words),
-    checkQuestion: makeCheckQuestion(text, words),
+    checkQuestion: makeCheckQuestion(words),
     checkAnswer: makeCheckAnswer(words, knownWords)
+  };
+}
+
+function buildEntry(rawText) {
+  const text = rawText.trim().replace(/\s+/g, " ");
+  const words = extractWords(text);
+  const knownWords = extractKnownWords(text);
+  const meaning = knownWords.length
+    ? knownWords.map((word) => `${word} = ${beginnerDictionary[word]}`).join(", ")
+    : "기본 사전에 없는 웹 표현입니다. 출처와 함께 저장하고 반복하세요.";
+
+  const example = words.length > 1 ? `I can say: ${text}` : `I want to use "${text}" today.`;
+
+  return {
+    id: crypto.randomUUID(),
+    text,
+    meaning,
+    example,
+    reviewCount: 0,
+    correctCount: 0,
+    createdAt: Date.now()
   };
 }
 
@@ -380,12 +463,12 @@ function makeBeginnerMeaning(text, knownWords, phrase) {
     return knownWords.map((item) => `${item.word} = ${item.meaning}`).join(", ");
   }
 
-  return `"${text}"는 아직 기본 사전에 없는 표현입니다. 먼저 소리 내어 읽고, 통째로 저장해서 반복하세요.`;
+  return `"${text}"는 아직 기본 사전에 없는 웹 표현입니다. 먼저 소리 내어 읽고, 출처와 함께 저장해서 반복하세요.`;
 }
 
-function makeChunks(text, words, phrase) {
+function makeChunks(_text, words, phrase) {
   if (!words.length) {
-    return ["영어 문장을 입력하면 의미 단위로 쪼개드립니다."];
+    return ["웹페이지에서 영어 문장을 가져오면 의미 단위로 쪼개드립니다."];
   }
 
   const chunks = [];
@@ -414,11 +497,9 @@ function findVerb(words) {
 }
 
 function makeSpeakLine(text, level) {
-  if (level === "speak") {
-    return `${text} / 천천히 한 번, 자연스럽게 한 번, 마지막으로 보지 않고 한 번`;
-  }
-
-  return text;
+  return level === "speak"
+    ? `${text} / 천천히 한 번, 자연스럽게 한 번, 마지막으로 보지 않고 한 번`
+    : text;
 }
 
 function makePracticeSentences(text, words) {
@@ -444,7 +525,7 @@ function makePracticeSentences(text, words) {
   return [base, `I can say: ${base}.`, `Today I practice: ${base}.`];
 }
 
-function makeCheckQuestion(_text, words) {
+function makeCheckQuestion(words) {
   const verb = findVerb(words);
   return `"${verb}"가 이 문장에서 어떤 역할을 하나요?`;
 }
@@ -467,29 +548,6 @@ function speakText(text) {
   speechSynthesis.speak(utterance);
 }
 
-function buildEntry(rawText) {
-  const text = rawText.trim().replace(/\s+/g, " ");
-  const words = extractWords(text);
-  const knownWords = extractKnownWords(text);
-  const meaning = knownWords.length
-    ? knownWords.map((word) => `${word} = ${beginnerDictionary[word]}`).join(", ")
-    : "아직 기본 사전에 없는 표현입니다. 그대로 저장하고 퀴즈로 반복해 보세요.";
-
-  const example = words.length > 1
-    ? `I can say: ${text}`
-    : `I want to use "${text}" today.`;
-
-  return {
-    id: crypto.randomUUID(),
-    text,
-    meaning,
-    example,
-    reviewCount: 0,
-    correctCount: 0,
-    createdAt: Date.now()
-  };
-}
-
 function extractWords(text) {
   return text.toLowerCase().match(/[a-z']+/g) || [];
 }
@@ -508,7 +566,7 @@ async function renderWordbook() {
   const words = await getWords();
 
   if (!words.length) {
-    wordList.innerHTML = '<li class="empty">아직 저장된 표현이 없습니다. 학습 탭에서 문장을 저장해 보세요.</li>';
+    wordList.innerHTML = '<li class="empty">아직 저장된 표현이 없습니다. 웹페이지에서 모르는 영어를 선택해 단어장에 넣어보세요.</li>';
     return;
   }
 
@@ -520,6 +578,7 @@ async function renderWordbook() {
       </div>
       <p class="word-meaning">${escapeHtml(entry.meaning)}</p>
       <p class="review-meta">복습 ${entry.reviewCount || 0}회 · 정답 ${entry.correctCount || 0}회</p>
+      ${entry.source?.url ? `<p class="source-meta">출처: ${escapeHtml(entry.source.title || "Web page")}</p>` : ""}
     </li>
   `).join("");
 
@@ -554,13 +613,11 @@ async function renderCoach() {
 }
 
 function getCoachDiagnosis(words, stats, totalReviews, accuracy) {
-  const todayCount = stats.todayCount || 0;
-
-  if (todayCount >= DAILY_GOAL) {
+  if ((stats.todayCount || 0) >= DAILY_GOAL) {
     return {
       action: "review",
       title: "오늘 목표는 완료했습니다",
-      message: "이제 새로 더 넣기보다 저장한 표현을 짧게 복습하면 기억이 오래갑니다.",
+      message: "이제 웹에서 저장한 표현을 짧게 복습하면 기억이 오래갑니다.",
       button: "단어장 복습하기"
     };
   }
@@ -568,16 +625,16 @@ function getCoachDiagnosis(words, stats, totalReviews, accuracy) {
   if (words.length < 3) {
     return {
       action: "learn",
-      title: "먼저 내 문장을 3개 모으세요",
-      message: "초보자는 남의 단어보다 내가 본 문장을 저장할 때 훨씬 빨리 늡니다.",
-      button: "문장 하나 학습하기"
+      title: "웹에서 모르는 표현을 3개 모으세요",
+      message: "직접 본 문장을 저장해야 실제 독해와 회화에 바로 연결됩니다.",
+      button: "웹 문장 가져오기"
     };
   }
 
   if (totalReviews < words.length) {
     return {
       action: "quiz",
-      title: "저장한 표현을 바로 확인하세요",
+      title: "저장한 웹 표현을 바로 확인하세요",
       message: "저장만 하면 잊어버립니다. 퀴즈로 한 번 꺼내야 실력이 됩니다.",
       button: "퀴즈로 확인하기"
     };
@@ -586,70 +643,66 @@ function getCoachDiagnosis(words, stats, totalReviews, accuracy) {
   if (accuracy && accuracy < 70) {
     return {
       action: "review",
-      title: "정답률을 먼저 올려야 합니다",
-      message: "새 표현보다 헷갈린 표현을 다시 보는 것이 지금은 더 효과적입니다.",
+      title: "헷갈린 표현을 먼저 복습하세요",
+      message: "새 표현보다 저장한 웹 표현을 다시 보는 것이 지금은 더 효과적입니다.",
       button: "약한 표현 복습하기"
     };
   }
 
   return {
-    action: "quiz",
-    title: "새 랜덤 문제로 실전 감각을 늘리세요",
-    message: "기본 루틴은 잡혔습니다. 온라인 랜덤 퀴즈로 낯선 단어에 익숙해지세요.",
-    button: "랜덤 퀴즈 풀기"
+    action: "learn",
+    title: "새 웹페이지에서 모르는 문장을 찾으세요",
+    message: "실제 콘텐츠에서 모르는 표현을 발견하고 단어장에 넣는 흐름을 반복하세요.",
+    button: "웹 문장 가져오기"
   };
 }
 
 function getCoachRoutine(action, todayCount) {
   const remaining = Math.max(0, DAILY_GOAL - todayCount);
 
-  if (action === "learn") {
+  if (action === "review") {
     return [
-      "예문 넣기 또는 웹페이지 문장 선택",
-      "학습 시작으로 뜻과 구조 확인",
-      "소리 듣고 3번 따라 말하기",
-      "바꿔 말하기 문장 1개 저장",
+      "단어장에서 웹 출처가 있는 표현 확인",
+      "뜻을 가리고 영어만 먼저 읽기",
+      "소리 내어 3번 말하기",
+      "헷갈린 표현을 다시 퀴즈로 확인",
       `오늘 남은 목표 ${remaining}개 채우기`
     ];
   }
 
-  if (action === "review") {
+  if (action === "quiz") {
     return [
-      "단어장에서 오래 안 본 표현 확인",
-      "뜻을 가리고 영어만 먼저 읽기",
-      "소리 내어 3번 말하기",
-      "헷갈린 표현을 다시 저장",
+      "저장한 웹 표현 또는 랜덤 퀴즈 1문제 풀기",
+      "틀린 단어를 소리 내어 읽기",
+      "예문을 한 번 따라 말하기",
+      "필요한 표현은 단어장에 유지",
       `오늘 남은 목표 ${remaining}개 채우기`
     ];
   }
 
   return [
-    "온라인 랜덤 퀴즈 1문제 풀기",
-    "틀린 단어를 소리 내어 읽기",
-    "예문을 한 번 따라 말하기",
-    "필요한 표현은 단어장에 저장",
-    `오늘 남은 목표 ${remaining}개 채우기`
+    "웹페이지에서 모르는 영어 드래그",
+    "선택 문장 가져오기 클릭",
+    "학습 시작으로 뜻과 구조 확인",
+    "소리 듣고 3번 따라 말하기",
+    "단어장에 넣기"
   ];
 }
 
 function runCoachAction(action) {
-  if (action === "learn") {
-    switchTab("learn");
-    if (!input.value.trim()) {
-      input.value = sample(learningSamples);
-      renderExplanation(input.value);
-    }
-    input.focus();
-    return;
-  }
-
   if (action === "review") {
     switchTab("wordbook");
     return;
   }
 
-  switchTab("quiz");
-  renderQuiz();
+  if (action === "quiz") {
+    switchTab("quiz");
+    renderQuiz();
+    return;
+  }
+
+  switchTab("learn");
+  input.focus();
 }
 
 async function renderQuiz() {
@@ -686,7 +739,7 @@ async function buildOnlineQuiz() {
     throw new Error("Not enough online quiz items");
   }
 
-  return makeRandomQuiz(items, "online");
+  return makeRandomQuiz(items);
 }
 
 async function fetchDictionaryItem(word) {
@@ -731,16 +784,15 @@ async function fetchJson(url, timeoutMs) {
 async function buildOfflineQuiz() {
   const savedWords = await getWords();
   const quizWords = savedWords.length >= 4 ? savedWords : starterDeck;
-  return makeRandomQuiz(shuffle(quizWords).slice(0, 4), "offline");
+  return makeRandomQuiz(shuffle(quizWords).slice(0, 4));
 }
 
-function makeRandomQuiz(items, source) {
+function makeRandomQuiz(items) {
   const answer = sample(items);
   const mode = sample(["meaning", "reverse", "spelling"]);
 
   if (mode === "reverse") {
     return {
-      source,
       mode,
       answer,
       title: "뜻을 보고 단어 고르기",
@@ -752,7 +804,6 @@ function makeRandomQuiz(items, source) {
 
   if (mode === "spelling") {
     return {
-      source,
       mode,
       answer,
       title: "스펠링 고르기",
@@ -763,7 +814,6 @@ function makeRandomQuiz(items, source) {
   }
 
   return {
-    source,
     mode,
     answer,
     title: "단어 뜻 맞히기",

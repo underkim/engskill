@@ -83,8 +83,17 @@
       </section>
 
       <section class="panel" id="learnPanel">
-        <label class="field-label" for="englishInput">영어 단어 또는 문장</label>
-        <textarea id="englishInput" rows="4" placeholder="웹페이지에서 영어 문장을 선택하거나 여기에 직접 입력하세요."></textarea>
+        <section class="web-capture-card">
+          <div>
+            <p class="daily-label">웹페이지 선택 학습</p>
+            <strong id="sourceTitle">아직 가져온 문장이 없습니다</strong>
+            <p id="sourceUrl">웹페이지에서 모르는 영어를 드래그한 뒤 가져오세요.</p>
+          </div>
+          <button class="primary full" id="importSelection" type="button">선택 문장 가져오기</button>
+        </section>
+
+        <label class="field-label" for="englishInput">웹에서 가져온 영어</label>
+        <textarea id="englishInput" rows="4" placeholder="웹페이지에서 모르는 단어 또는 문장을 드래그한 뒤 '선택 문장 가져오기'를 누르세요."></textarea>
 
         <div class="learn-tools" aria-label="학습 도구">
           <button class="tool-pill active" data-level="easy" type="button">아주 쉽게</button>
@@ -94,7 +103,7 @@
 
         <div class="actions">
           <button class="primary" id="explainButton" type="button">학습 시작</button>
-          <button class="secondary" id="saveButton" type="button">단어장 저장</button>
+          <button class="secondary" id="saveButton" type="button">단어장에 넣기</button>
         </div>
 
         <div class="lesson-shortcuts">
