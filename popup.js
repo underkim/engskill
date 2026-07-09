@@ -1035,14 +1035,24 @@ function makeBlankWord(word) {
 
 function makeSpellingDistractors(word) {
   const letters = word.split("");
-  const swapped = [...letters];
-  if (swapped.length > 3) {
-    [swapped[1], swapped[2]] = [swapped[2], swapped[1]];
+  const candidates = [];
+
+  for (let i = 0; i < letters.length - 1; i++) {
+    const swapped = [...letters];
+    [swapped[i], swapped[i + 1]] = [swapped[i + 1], swapped[i]];
+    candidates.push(swapped.join(""));
   }
 
-  const dropped = letters.filter((_, index) => index !== Math.max(1, Math.floor(letters.length / 2))).join("");
-  const doubled = `${word}${word[word.length - 1]}`;
-  return [...new Set([swapped.join(""), dropped, doubled])].filter((item) => item !== word).slice(0, 3);
+  for (let i = 0; i < letters.length; i++) {
+    if (letters.length - 1 >= 2) {
+      candidates.push(letters.filter((_, index) => index !== i).join(""));
+    }
+  }
+
+  candidates.push(`${word}${word[word.length - 1]}`);
+  candidates.push(`${word[0]}${word}`);
+
+  return [...new Set(candidates)].filter((item) => item !== word && item.length >= 2).slice(0, 3);
 }
 
 async function saveQuizResult(answerId, isCorrect) {
