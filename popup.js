@@ -1093,9 +1093,11 @@ async function markStudy(amount) {
 async function getStats() {
   const { stats = {} } = await chrome.storage.local.get(["stats"]);
   const today = getDateKey();
+  const yesterday = getDateKey(-1);
 
   if (stats.lastStudyDate && stats.lastStudyDate !== today) {
-    return { ...stats, todayCount: 0 };
+    const streakBroken = stats.lastStudyDate !== yesterday;
+    return { ...stats, todayCount: 0, streak: streakBroken ? 0 : stats.streak || 0 };
   }
 
   return {
